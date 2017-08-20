@@ -204,7 +204,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     @Override
     public void onDataRecive(int fd, byte[] data, int len) {
         //收到的串口数据
-
+        logData(data,len);
     }
 
     //----------------------------------------------------串口号或波特率变化时，关闭打开的串口

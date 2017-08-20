@@ -563,7 +563,15 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
             mSerialFd = serial.native_serial_open(mPort);
             if (mSerialFd > 0) {
                 log("打开串口成功！");
-                serial.serial_readloop(mSerialFd,100);
+                Runnable run=new Runnable() {
+                    public void run() {
+                        log("开始读取串口数据");
+                        serial.serial_readloop(mSerialFd,100);
+                        log("读取结束");
+                    }
+                };
+                Thread pthread = new Thread(run);
+                pthread.start();
             } else {
                 log("打开串口失败！请查看串口是否存在");
             }

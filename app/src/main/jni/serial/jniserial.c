@@ -62,6 +62,7 @@ int jni_log_event(JNIEnv *env, jobject obj,int fd,char *msg)
         jstring strmsg = (*jniEnv)->NewStringUTF(jniEnv, (const char *)msg);
         /*调用一个由methodID定义的实例的Java方法，可选择传递参数（args）的数组到这个方法。*/
         (*jniEnv)->CallVoidMethod(jniEnv, javaObject, onLogEvent,(jint)fd,strmsg);
+        (*env)->DeleteLocalRef(env,strmsg);
         return 0;
     }
     return -1;
@@ -89,6 +90,7 @@ int jni_data_recive_event(JNIEnv *env, jobject obj,int fd,char *data,int len)
         (*env)->SetByteArrayRegion(env,jarray, 0, len, byte);
         /*调用一个由methodID定义的实例的Java方法，可选择传递参数（args）的数组到这个方法。*/
         (*jniEnv)->CallVoidMethod(jniEnv, javaObject, onDataReciveEvent,(jint)fd,jarray,len);
+        (*env)->DeleteLocalRef(env, jarray);
         return 0;
     }
     return -1;
@@ -215,7 +217,7 @@ JNIEXPORT jint JNICALL Java_com_androidex_plugins_kkserial_native_1serial_1write
     return r;
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_androidex_plugins_kkserial_native_1serial_1readloop
+JNIEXPORT int JNICALL Java_com_androidex_plugins_kkserial_native_1serial_1readloop
         (JNIEnv *env, jobject this, jint fd, jint length)
 {
     if(length <= 0 || length > MAX_READLEN)

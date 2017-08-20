@@ -138,10 +138,3 @@ int kkserial_readloop(HKKP env,HKKP obj,int fd,int len)
 	return res;
 }
 
-
-
-
-
-
-
-

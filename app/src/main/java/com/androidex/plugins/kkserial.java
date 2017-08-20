@@ -78,6 +78,10 @@ public class kkserial {
         return native_serial_read(fd,length,timeout);
 	}
 
+    public int serial_readloop(int fd,int length){
+        return native_serial_readloop(fd,length);
+    }
+
     public String serial_readHex(int fd,int length, int timeout){
         return native_serial_readHex(fd,length,timeout);
     }

@@ -34,6 +34,7 @@ import android.widget.ToggleButton;
 
 import com.androidex.apps.bean.*;
 import com.androidex.plugins.OnCallback;
+import com.androidex.plugins.kkserial;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -66,11 +67,14 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     Spinner SpinnerCOMA;
     Spinner SpinnerBaudRateCOMA;
     RadioButton radioButtonTxt, radioButtonHex;
-    SerialControl ComA;//4个串口
     DispQueueThread DispQueue;//刷新显示线程
     SerialPortFinder mSerialPortFinder;//串口设备搜索
     AssistBean AssistData;//用于界面数据序列化和反序列化
     int iRecLines = 0;//接收区行数
+
+    private kkserial serial;        //串口测试对象
+    private int mSerialFd = 0;      //打开的串口句柄，调用串口对象函数时需要
+    private String mPort = "/dev/ttymxc2,115200,N,1,8";     //打开串口的参数
 
     /**
      * Called when the activity is first created.
@@ -79,7 +83,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main);
-        ComA = new SerialControl(this);
+        serial = new kkserial(this);
         DispQueue = new DispQueueThread();
         DispQueue.start();
         AssistData = getAssistData();
@@ -89,14 +93,14 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     @Override
     public void onDestroy() {
         saveAssistData(AssistData);
-        CloseComPort(ComA);
+        CloseComPort();
         super.onDestroy();
     }
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        CloseComPort(ComA);
+        CloseComPort();
         setContentView(R.layout.main);
         setControls();
     }
@@ -176,16 +180,16 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.btn_serialText:
-                sendPortData(ComA, "$001,01&");
+                sendData("$001,01&");
                 break;
             case R.id.btn_queryType:
-                sendPortData(ComA, "$001,02&");
+                sendData("$001,02&");
                 break;
             case R.id.btn_queryVersion:
-                sendPortData(ComA, "$001,03&");
+                sendData("$001,03&");
                 break;
             case R.id.btn_parameter:
-                sendPortData(ComA, "$001,04&");
+                sendData("$001,04&");
                 break;
 
         }
@@ -207,7 +211,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     class ItemSelectedEvent implements Spinner.OnItemSelectedListener {
         public void onItemSelected(AdapterView<?> arg0, View arg1, int arg2, long arg3) {
             if ((arg0 == SpinnerCOMA) || (arg0 == SpinnerBaudRateCOMA)) {
-                CloseComPort(ComA);
+                CloseComPort();
                 checkBoxAutoCOMA.setChecked(false);
                 toggleButtonCOMA.setChecked(false);
             }
@@ -277,8 +281,8 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
                     buttonView.setChecked(false);
                     return;
                 }
-                SetLoopData(ComA, editTextCOMA.getText().toString());
-                SetAutoSend(ComA, isChecked);
+                SetLoopData(editTextCOMA.getText().toString());
+                SetAutoSend(isChecked);
             }
         }
     }
@@ -289,7 +293,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
             if (v == ButtonClear) {
                 editTextRecDisp.setText("");
             } else if (v == ButtonSendCOMA) {
-                sendPortData(ComA, editTextCOMA.getText().toString());
+                sendData(editTextCOMA.getText().toString());
             }
         }
     }
@@ -317,53 +321,18 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
         public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
             if (buttonView == toggleButtonCOMA) {
                 if (isChecked) {
-                    ComA.setPort(SpinnerCOMA.getSelectedItem().toString());
-                    ComA.setBaudRate(SpinnerBaudRateCOMA.getSelectedItem().toString());
-                    OpenComPort(ComA);
+                    if(mSerialFd <= 0) {
+                        mPort = String.format("%s,%s,N,1,8", SpinnerCOMA.getSelectedItem().toString(),
+                                SpinnerBaudRateCOMA.getSelectedItem().toString());
+                        OpenComPort(mPort);
+                    }
                 } else {
-                    CloseComPort(ComA);
-                    checkBoxAutoCOMA.setChecked(false);
+                    if(mSerialFd > 0){
+                        CloseComPort();
+                    }
                 }
+                checkBoxAutoCOMA.setChecked(mSerialFd > 0);
             }
-        }
-    }
-
-    //----------------------------------------------------串口控制类
-    public class SerialControl extends SerialHelper {
-
-
-        public SerialControl(Context context) {
-            super(context);
-        }
-
-        @Override
-        protected void onDataReceived(final ComBean ComRecData) {
-            //数据接收量大或接收时弹出软键盘，界面会卡顿,可能和6410的显示性能有关
-            //直接刷新显示，接收数据量大时，卡顿明显，但接收与显示同步。
-            //用线程定时刷新显示可以获得较流畅的显示效果，但是接收数据速度快于显示速度时，显示会滞后。
-            //最终效果差不多-_-，线程定时刷新稍好一些。
-            //DispQueue.AddQueue(ComRecData);//线程定时刷新显示(推荐)
-            runOnUiThread(new Runnable()//直接刷新显示
-            {
-                public void run() {
-                    DispRecData(ComRecData);
-                }
-            });
-        }
-
-        @Override
-        protected void onLog(final String msg){
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    log(msg);
-                }
-            });
-        }
-
-        @Override
-        protected void onClearMessage(){
-            editTextRecDisp.setText("");
         }
     }
 
@@ -452,7 +421,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     private void setDelayTime(TextView v) {
         if (v == editTextTimeCOMA) {
             AssistData.sTimeA = v.getText().toString();
-            SetiDelayTime(ComA, v.getText().toString());
+            SetiDelayTime(v.getText().toString());
         }
     }
 
@@ -460,21 +429,21 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     private void setSendData(TextView v) {
         if (v == editTextCOMA) {
             AssistData.setSendA(v.getText().toString());
-            SetLoopData(ComA, v.getText().toString());
+            SetLoopData(v.getText().toString());
         }
     }
 
     //----------------------------------------------------设置自动发送延时
-    private void SetiDelayTime(SerialHelper ComPort, String sTime) {
-        ComPort.setiDelay(Integer.parseInt(sTime));
+    private void SetiDelayTime(String sTime) {
+        //ComPort.setiDelay(Integer.parseInt(sTime));
     }
 
     //----------------------------------------------------设置自动发送数据
-    private void SetLoopData(SerialHelper ComPort, String sLoopData) {
+    private void SetLoopData(String sLoopData) {
         if (radioButtonTxt.isChecked()) {
-            ComPort.setTxtLoopData(sLoopData);
+            //ComPort.setTxtLoopData(sLoopData);
         } else if (radioButtonHex.isChecked()) {
-            ComPort.setHexLoopData(sLoopData);
+            //ComPort.setHexLoopData(sLoopData);
         }
     }
 
@@ -557,7 +526,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     }
 
     //----------------------------------------------------设置自动发送模式开关
-    private void SetAutoSend(SerialHelper ComPort, boolean isAutoSend) {
+    private void SetAutoSend(boolean isAutoSend) {
         if (isAutoSend) {
             //ComPort.startSend();
         } else {
@@ -566,33 +535,38 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     }
 
     //----------------------------------------------------串口发送
-    private void sendPortData(SerialHelper ComPort, String sOut) {
-        if (ComPort != null && ComPort.isOpen()) {
-            if (radioButtonTxt.isChecked()) {
-                ComPort.sendTxt(sOut);
-            } else if (radioButtonHex.isChecked()) {
-                ComPort.sendHex(sOut);
+    private void sendData(String sOut) {
+        if(mSerialFd > 0){
+            if(radioButtonHex.isChecked()){
+                byte[] data = sOut.getBytes();
+                serial.serial_write(mSerialFd,data,data.length);
+            }else{
+                serial.serial_writeHex(mSerialFd,sOut);
             }
         }
     }
 
     //----------------------------------------------------关闭串口
-    private void CloseComPort(SerialHelper ComPort) {
-        if (ComPort != null) {
-            //ComPort.stopSend();
-            ComPort.close();
+    private void CloseComPort() {
+        if(mSerialFd > 0){
+            serial.serial_close(mSerialFd);
+            mSerialFd = 0;
         }
     }
 
     //----------------------------------------------------打开串口
-    private void OpenComPort(SerialHelper ComPort) {
-
-        int mSerialFd = ComPort.open();
-        if (mSerialFd > 0) {
-            ShowMessage("打开串口成功！");
-            ComPort.startReadSerial();
-        } else {
-            ShowMessage("打开串口失败！请查看串口是否存在");
+    private void OpenComPort(String port) {
+        mPort = port;
+        if(mSerialFd > 0){
+            //串口已经打开
+        }else{
+            mSerialFd = serial.native_serial_open(mPort);
+            if (mSerialFd > 0) {
+                log("打开串口成功！");
+                serial.serial_readloop(mSerialFd,100);
+            } else {
+                log("打开串口失败！请查看串口是否存在");
+            }
         }
     }
 

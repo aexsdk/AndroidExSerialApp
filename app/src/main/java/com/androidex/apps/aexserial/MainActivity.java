@@ -106,9 +106,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
         String appName = getString(R.string.app_name);
         try {
             com.androidex.aexlibs.hwService mService = new com.androidex.aexlibs.hwService(this);
-            //PackageInfo pinfo = getPackageManager().getPackageInfo("com.androidex.comassistant", PackageManager.GET_CONFIGURATIONS);
-//			String versionCode = String.valueOf(pinfo.versionCode);
-            setTitle(appName + mService.getSdkVersion());
+            setTitle(appName + ":" + mService.getSdkVersion());
         } catch (Exception e) {
             e.printStackTrace();
         }

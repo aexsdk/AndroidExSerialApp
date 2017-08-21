@@ -7,6 +7,8 @@ package com.androidex.plugins;
 import android.content.Context;
 import com.androidex.logger.Log;
 
+import java.io.UnsupportedEncodingException;
+
 public class kkserial {
     private static final String TAG = "serial";
 
@@ -24,6 +26,24 @@ public class kkserial {
         ctx = _ctx;
     }
 
+    public String byteToString(byte[] data){
+        StringBuilder sMsg = new StringBuilder();
+        if (data[0] == '$') {
+            try {
+                sMsg.append(new String(data, "UTF-8"));
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+        }else{
+            try {
+                sMsg.append(new String(data, "UTF-8"));
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return sMsg.toString();
+    }
     /**
      *      说明：该函数接收从jni层传送上来的事件，当JNI层函数在返回前需要Java层执行某些操作或者传送信息时，使用此事件函数。
      * 如果本函数没有处理则默认会交给生成对象时提供的Context对象去处理。
@@ -31,7 +51,7 @@ public class kkserial {
      * @param _msg  消息内容
      */
     public void OnLogEvent(int fd, String _msg) {
-        Log.d(TAG,String.format("fd=%d,msg=%s\n",fd,_msg));
+        //android.util.Log.i(TAG, String.format("OnLogEvent: fd=%d,msg=%s\n",fd,_msg));
         if ((ctx != null) && (ctx instanceof OnCallback)) {
             OnCallback listener = (OnCallback) ctx;
             listener.onLogEvent(fd, _msg);
@@ -40,6 +60,7 @@ public class kkserial {
 
     public void OnDataReciveEvent(int fd, byte[] data,int len) {
         //收到数据的事件
+        // android.util.Log.i(TAG, String.format("OnLogEvent: fd=%d,msg=%s\n",fd,byteToString(data)));
         if ((ctx != null) && (ctx instanceof OnCallback)) {
             OnCallback listener = (OnCallback) ctx;
             listener.onDataRecive(fd, data,len);
@@ -78,8 +99,17 @@ public class kkserial {
         return native_serial_read(fd,length,timeout);
 	}
 
-    public int serial_readloop(int fd,int length){
-        return native_serial_readloop(fd,length);
+    public int serial_readloop(final int fd, final int length){
+        Runnable run=new Runnable() {
+            public void run() {
+                OnLogEvent(fd,"开始读取串口数据");
+                native_serial_readloop(fd,length);
+                OnLogEvent(fd,"读取结束");
+            }
+        };
+        Thread pthread = new Thread(run);
+        pthread.start();
+        return 1;
     }
 
     public String serial_readHex(int fd,int length, int timeout){

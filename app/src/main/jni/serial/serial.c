@@ -32,10 +32,12 @@
 	char pszDest[MAX_BUFF];
 	va_list args;
 
+    memset(pszDest,0,MAX_BUFF);
 	va_start(args, pszFormat);
 	vsnprintf(pszDest, sizeof(pszDest), pszFormat, args);
 	va_end(args);
 	//只有设置了事件回调函数，此函数才会调用事件，否则什么也不做
+    //__android_log_print(ANDROID_LOG_DEBUG,"kkserial","%s",pszDest);
 	jni_log_event(env,obj,fd,pszDest);
     return 0;
 }
@@ -60,14 +62,17 @@ int kkserial_open(HKKP env,HKKP obj,char *arg)
 void kkserial_close(HKKP env,HKKP obj,int fd)
 {
 	if(fd >0){
+        kkserial_event(env,obj,fd,"Close %d",fd);
 		com_close(fd);
-	}
+	}else{
+        kkserial_event(env,obj,fd,"Close %d",fd);
+    }
 }
 
 int kkserial_write(HKKP env,HKKP obj,int fd,char *data,int len)
 {
 	if(fd <= 0 )return FALSE;
-    __android_log_print(ANDROID_LOG_DEBUG,"kkserial","kkserial_write(data[0]=%02X,len=%d)",data[0],len);
+    //__android_log_print(ANDROID_LOG_DEBUG,"kkserial","kkserial_write(data[0]=%02X,len=%d)",data[0],len);
     int r = com_write(fd, data, len);
 	return r;
 }
@@ -99,7 +104,7 @@ int kkserial_readloop(HKKP env,HKKP obj,int fd,int len)
 	int	res,loop = 1;
 	int revLen = len > 1023 ? 1023 : len-1;
 
-	kkserial_event(env,obj,"KKSERIAL read:fd=%d,length=%d\n", fd,len);
+	kkserial_event(env,obj,fd,"KKSERIAL read:fd=%d,length=%d\n", fd,len);
 	while(loop)
 	{
 		int iret = 0;
@@ -108,7 +113,9 @@ int kkserial_readloop(HKKP env,HKKP obj,int fd,int len)
 		FD_CLR(fd,&rfds);
 		FD_ZERO(&rfds);
 		FD_SET(fd, &rfds);
+        kkserial_event(env,obj,fd,"Start select ...");
 		iret = select(fd + 1, &rfds, NULL, NULL, NULL);
+        //kkserial_event(env,obj,fd,"   select ret=%d",iret);
 		if(iret < 0){
 			//发生错误
 			kkserial_event(env,obj,fd,"KKSERIAL select error: %s", strerror(errno));
@@ -130,8 +137,11 @@ int kkserial_readloop(HKKP env,HKKP obj,int fd,int len)
 				}else{
 					//收到数据
 					jni_data_recive_event(env,obj,fd,data,res);
+                    //kkserial_event(env,obj,fd,"Recive from %d:%d:%s",fd,res,data);
 				}
-			}
+			}else{
+                kkserial_event(env,obj,fd,"No fd_isset");
+            }
 		}
 	}
 	kkserial_event(env,obj,fd,"KKSERIAL read end.");

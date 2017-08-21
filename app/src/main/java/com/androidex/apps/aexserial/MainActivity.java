@@ -7,11 +7,15 @@ package com.androidex.apps.aexserial;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.os.BatteryManager;
 import android.os.Bundle;
+import android.os.Parcelable;
 import android.text.InputType;
 import android.text.method.KeyListener;
 import android.text.method.NumberKeyListener;
@@ -43,9 +47,12 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import android.content.BroadcastReceiver;
+
 
 import static android.R.attr.versionName;
 
@@ -75,6 +82,10 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     private kkserial serial;        //串口测试对象
     private int mSerialFd = 0;      //打开的串口句柄，调用串口对象函数时需要
     private String mPort = "/dev/ttymxc2,115200,N,1,8";     //打开串口的参数
+    private Thread pthread = null;
+    public static final String bdSerialReciveData          = "bd.serial.recivedata";
+    public static final String bdSerialReciveLog           = "bd.serial.recivelog";
+    private NotifyReceiver mReceiver;
 
     /**
      * Called when the activity is first created.
@@ -88,10 +99,16 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
         DispQueue.start();
         AssistData = getAssistData();
         setControls();
+
+        mReceiver = new NotifyReceiver();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(bdSerialReciveData);
+        registerReceiver(mReceiver, filter);
     }
 
     @Override
     public void onDestroy() {
+        unregisterReceiver(mReceiver);
         saveAssistData(AssistData);
         CloseComPort();
         super.onDestroy();
@@ -198,13 +215,23 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     @Override
     public void onLogEvent(int fd, String msg) {
         //收到的日志数据
-        log(String.format("fd=%d:%s",fd,msg));
+        //log(String.format("fd=%d:%s", fd, msg));
+        android.util.Log.i("SERIAL", String.format("OnLogEvent: fd=%d,msg=%s\n",fd,msg));
+        Intent ds_intent = new Intent();
+        ds_intent.setAction(bdSerialReciveLog);
+        ds_intent.putExtra("data",msg);
+        sendBroadcast(ds_intent);
     }
 
     @Override
     public void onDataRecive(int fd, byte[] data, int len) {
         //收到的串口数据
-        logData(data,len);
+        //logData(data, len);
+        android.util.Log.i("SERIAL", String.format("Rev from fd=%d(%d):%s\n",fd,len,serial.byteToString(data)));
+        Intent ds_intent = new Intent();
+        ds_intent.setAction(bdSerialReciveData);
+        ds_intent.putExtra("data",data);
+        sendBroadcast(ds_intent);
     }
 
     //----------------------------------------------------串口号或波特率变化时，关闭打开的串口
@@ -522,7 +549,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
 
     private void log(String msg){
         editTextRecDisp.append(String.format("\r\n%s\r\n",msg));
-        //Log.i("TS",msg);
+        Log.i("TS",msg);
     }
 
     //----------------------------------------------------设置自动发送模式开关
@@ -549,6 +576,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
     //----------------------------------------------------关闭串口
     private void CloseComPort() {
         if(mSerialFd > 0){
+            log(String.format("关闭串口%d",mSerialFd));
             serial.serial_close(mSerialFd);
             mSerialFd = 0;
         }
@@ -560,18 +588,10 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
         if(mSerialFd > 0){
             //串口已经打开
         }else{
-            mSerialFd = serial.native_serial_open(mPort);
+            mSerialFd = serial.serial_open(mPort);
             if (mSerialFd > 0) {
                 log("打开串口成功！");
-                Runnable run=new Runnable() {
-                    public void run() {
-                        log("开始读取串口数据");
-                        serial.serial_readloop(mSerialFd,100);
-                        log("读取结束");
-                    }
-                };
-                Thread pthread = new Thread(run);
-                pthread.start();
+                serial.serial_readloop(mSerialFd,100);
             } else {
                 log("打开串口失败！请查看串口是否存在");
             }
@@ -583,4 +603,18 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
         //Toast.makeText(this, sMsg, Toast.LENGTH_SHORT).show();
         log(sMsg);
     }
+
+    public class NotifyReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent.getAction().equals(bdSerialReciveLog)){
+                String data = intent.getStringExtra("data");
+                log(data);
+            }else if(intent.getAction().equals(bdSerialReciveData)){
+                byte[] data = intent.getByteArrayExtra("data");
+                logData(data,data.length);
+            }
+        }
+    }
+
 }

@@ -367,8 +367,9 @@ void com_close(int fd)
 	//检查串口是否打开如果没有打开则返回，什么也不做
 	if(fd>0){
         tcflush(fd, TCIOFLUSH);
-		if(close(fd)==-1)
-			__android_log_print(ANDROID_LOG_INFO, "utils","Close Serial Port:%s\n",strerror(errno));
+		if(close(fd) == -1){
+			__android_log_print(ANDROID_LOG_ERROR, "utils","Close Serial Port:%s\n",strerror(errno));
+		}
 	}
 }
 /**

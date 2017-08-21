@@ -24,6 +24,10 @@ static jclass getProvider(JNIEnv *env)
     return (*env)->FindClass(env,"com/androidex/plugins/kkserial");
 }
 
+jclass lProvider;
+jmethodID onLogEvent = NULL;
+jmethodID onDataReciveEvent = NULL;
+
 /*
  *Returns the method ID for an instance (nonstatic) method of a class or interface.
 
@@ -33,8 +37,9 @@ static jclass getProvider(JNIEnv *env)
  * */
 static jmethodID getMethod(JNIEnv *env, char *func,char *result)
 {
-    jclass lProvider = getProvider(env);
-
+    if(lProvider == NULL) {
+        lProvider = getProvider(env);
+    }
     if(lProvider)
     {
         return (*env)->GetMethodID(env, lProvider, func,result);
@@ -47,7 +52,6 @@ static jmethodID getMethod(JNIEnv *env, char *func,char *result)
  */
 int jni_log_event(JNIEnv *env, jobject obj,int fd,char *msg)
 {
-    jmethodID onLogEvent = NULL;
     JNIEnv* jniEnv = (JNIEnv*)env;
     jobject javaObject = (jobject)obj;
 
@@ -62,7 +66,7 @@ int jni_log_event(JNIEnv *env, jobject obj,int fd,char *msg)
         jstring strmsg = (*jniEnv)->NewStringUTF(jniEnv, (const char *)msg);
         /*调用一个由methodID定义的实例的Java方法，可选择传递参数（args）的数组到这个方法。*/
         (*jniEnv)->CallVoidMethod(jniEnv, javaObject, onLogEvent,(jint)fd,strmsg);
-        (*env)->DeleteLocalRef(env,strmsg);
+        (*jniEnv)->DeleteLocalRef(jniEnv,strmsg);
         return 0;
     }
     return -1;
@@ -73,7 +77,6 @@ int jni_log_event(JNIEnv *env, jobject obj,int fd,char *msg)
  */
 int jni_data_recive_event(JNIEnv *env, jobject obj,int fd,char *data,int len)
 {
-    jmethodID onDataReciveEvent = NULL;
     JNIEnv* jniEnv = (JNIEnv*)env;
     jobject javaObject = (jobject)obj;
 
@@ -82,14 +85,14 @@ int jni_data_recive_event(JNIEnv *env, jobject obj,int fd,char *data,int len)
     }
 
     if(onDataReciveEvent == NULL){
-        onDataReciveEvent = getMethod(env,"OnDataReciveEvent","(ILjava/lang/[B/lang;)V");
+        onDataReciveEvent = getMethod(env,"OnDataReciveEvent","(I[BI)V");
     }
     if(onDataReciveEvent){
         jbyte* byte = (jbyte*)data;
         jbyteArray jarray = (*env)->NewByteArray(env,len);
         (*env)->SetByteArrayRegion(env,jarray, 0, len, byte);
         /*调用一个由methodID定义的实例的Java方法，可选择传递参数（args）的数组到这个方法。*/
-        (*jniEnv)->CallVoidMethod(jniEnv, javaObject, onDataReciveEvent,(jint)fd,jarray,len);
+        (*jniEnv)->CallVoidMethod(jniEnv, javaObject, onDataReciveEvent,(jint)fd,jarray,(jint)len);
         (*env)->DeleteLocalRef(env, jarray);
         return 0;
     }

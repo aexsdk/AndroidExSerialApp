@@ -103,6 +103,7 @@ public class MainActivity extends Activity implements View.OnClickListener,OnCal
         mReceiver = new NotifyReceiver();
         IntentFilter filter = new IntentFilter();
         filter.addAction(bdSerialReciveData);
+        filter.addAction(bdSerialReciveLog);
         registerReceiver(mReceiver, filter);
     }
 
